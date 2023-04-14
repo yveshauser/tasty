@@ -24,7 +24,7 @@ import Test.Tasty ( testGroup )
 import Test.Tasty.Providers
 import Test.Tasty.Options
 import qualified Test.QuickCheck as QC
-import Test.Tasty.Runners (formatMessage)
+import Test.Tasty.Runners as T (formatMessage, Result (..), Outcome (..), FailureReason (..))
 import Test.QuickCheck hiding -- for re-export
   ( quickCheck
   , Args(..)
@@ -219,18 +219,13 @@ instance IsTest QC where
           if "\n" `isSuffixOf` qcOutput
             then qcOutput
             else qcOutput ++ "\n"
-        testSuccessful = successful r
-        putReplayInDesc = (not testSuccessful) || showReplay
     return $
-      (if testSuccessful then testPassed else testFailed)
-      (qcOutputNl ++
-        (if putReplayInDesc then replayMsg else ""))
-
-successful :: QC.Result -> Bool
-successful r =
-  case r of
-    QC.Success {} -> True
-    _ -> False
+      case (r, showReplay) of
+        (QC.Success {}, True) -> testPassed $ qcOutputNl ++ replayMsg
+        (QC.Success {}, False) -> testPassed qcOutputNl
+        (QC.Failure { theException = Just e }, _) ->
+          (testFailed $ qcOutputNl ++ replayMsg) { resultOutcome = T.Failure (TestThrewException e) }
+        _ -> testFailed $ qcOutputNl ++ replayMsg
 
 makeReplayMsg :: Int -> Int -> String
 makeReplayMsg seed size = let
